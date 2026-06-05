@@ -23,13 +23,13 @@ The application is divided into two main areas:
 3. Create a `.env.local` file in the root of the project with the client's keys:
 ```env
 VITE_SUPABASE_URL=https://client-id.supabase.co
-VITE_SUPABASE_ANON_KEY=client-jwt-key...
+VITE_SUPABASE_ANON_KEY=ey...
 ```
 
 ### 2. Dynamic Customization (Branding)
 There is no need to change the main source code to modify colors or features for a client. Everything is centralized in the global configuration file:
 
-👉 **Edit the file:** `src/renderer/src/config.ts`
+ **Edit the file:** `src/renderer/src/config.ts`
 
 ```typescript
 export const AppConfig = {
@@ -53,7 +53,7 @@ export const AppConfig = {
 
 ---
 
-## 💻 Development Commands
+## Development Commands
 
 ```bash
 # Install dependencies
