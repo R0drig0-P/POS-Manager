@@ -12,7 +12,7 @@ export const AppConfig = {
   },
   display: {
     width: 1024, // Configurable resolution width
-    height: 768  // Configurable resolution height
+    height: 768 // Configurable resolution height
   },
   theme: {
     primaryColor: '#111827', // Primary color (Hotbars, Main Buttons)

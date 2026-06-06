@@ -1,4 +1,4 @@
-import { JSX, useState, useEffect } from 'react'
+import { JSX, CSSProperties, useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { AppConfig } from '../config'
 import TerminalHotbar from '../components/terminal/TerminalHotbar'
@@ -27,19 +27,52 @@ interface CartItem {
   price: number
   type: 'service' | 'product'
   commission: number
+  quantity: number
 }
 
 interface SaleItem {
   item_name: string
   quantity: number
+  price_at_sale: number
 }
 
 interface Sale {
   id: string
   total_amount: number
   created_at: string
-  client_name?: string
+  clients?: { name: string; phone: string } | null
   sale_items: SaleItem[]
+}
+
+const styles: Record<string, CSSProperties> = {
+  container: {
+    fontFamily: 'system-ui, -apple-system, sans-serif',
+    backgroundColor: AppConfig.theme.backgroundColor,
+    height: '100vh',
+    width: '100vw',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    boxSizing: 'border-box',
+    overflow: 'hidden'
+  },
+  mainArea: { flex: 1, padding: '32px', overflowY: 'auto' },
+  contentWrapper: { width: '100%', margin: '0 auto' },
+  roleSection: { marginBottom: '40px' },
+  roleTitle: {
+    fontSize: '22px',
+    color: '#4b5563',
+    textTransform: 'uppercase',
+    letterSpacing: '1px',
+    borderBottom: '2px solid #e5e7eb',
+    paddingBottom: '8px',
+    marginBottom: '20px',
+    marginTop: 0
+  },
+  workersRow: { display: 'flex', gap: '16px', overflowX: 'auto', paddingBottom: '12px' },
+  emptyMessage: { color: '#6b7280', textAlign: 'center', marginTop: '40px' }
 }
 
 export default function WorkerTerminal(): JSX.Element {
@@ -55,7 +88,9 @@ export default function WorkerTerminal(): JSX.Element {
 
   // Estado do Carrinho (Nova Venda)
   const [cart, setCart] = useState<CartItem[]>([])
-  const [clientName, setClientName] = useState('')
+  const [clientFirstName, setClientFirstName] = useState('')
+  const [clientLastName, setClientLastName] = useState('')
+  const [clientPhone, setClientPhone] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
@@ -67,9 +102,6 @@ export default function WorkerTerminal(): JSX.Element {
   useEffect(() => {
     if (selectedWorker) {
       fetchWorkerTodaySales(selectedWorker.id)
-    } else {
-      setWorkerSales([])
-      setIsDeleteMode(false)
     }
   }, [selectedWorker])
 
@@ -83,14 +115,16 @@ export default function WorkerTerminal(): JSX.Element {
     if (data) setServices(data)
   }
 
-  async function fetchWorkerTodaySales(workerId: string) {
+  async function fetchWorkerTodaySales(workerId: string): Promise<void> {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
 
     // Vai buscar as vendas e os items associados num só pedido (magia do Supabase!)
     const { data, error } = await supabase
       .from('sales')
-      .select('id, total_amount, created_at, sale_items(item_name, quantity)')
+      .select(
+        'id, total_amount, created_at, clients(name, phone), sale_items(item_name, quantity, price_at_sale)'
+      )
       .eq('worker_id', workerId)
       .gte('created_at', today.toISOString())
       .order('created_at', { ascending: false })
@@ -102,15 +136,24 @@ export default function WorkerTerminal(): JSX.Element {
 
   function addToCart(service: Service): void {
     if (!selectedWorker) return
-    const newItem: CartItem = {
-      id: Math.random().toString(36).substring(2, 9),
-      item_id: service.id,
-      name: service.name,
-      price: service.price,
-      type: 'service',
-      commission: selectedWorker.commission_services
-    }
-    setCart([...cart, newItem])
+    setCart((prevCart) => {
+      const existing = prevCart.find((i) => i.item_id === service.id && i.price === service.price)
+      if (existing) {
+        return prevCart.map((i) => (i.id === existing.id ? { ...i, quantity: i.quantity + 1 } : i))
+      }
+      return [
+        ...prevCart,
+        {
+          id: Math.random().toString(36).substring(2, 9),
+          item_id: service.id,
+          name: service.name,
+          price: service.price,
+          type: 'service',
+          commission: selectedWorker.commission_services,
+          quantity: 1
+        }
+      ]
+    })
   }
 
   function removeFromCart(cartItemId: string): void {
@@ -121,11 +164,33 @@ export default function WorkerTerminal(): JSX.Element {
     if (!selectedWorker || cart.length === 0) return
     setIsSubmitting(true)
 
-    const totalAmount = cart.reduce((sum, item) => sum + item.price, 0)
+    const totalAmount = cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
+
+    // Configuração do Cliente
+    const fullName = `${clientFirstName.trim()} ${clientLastName.trim()}`
+    const phone = clientPhone.trim()
+    let clientId = null
+
+    const { data: existingClients } = await supabase
+      .from('clients')
+      .select('id')
+      .eq('phone', phone)
+      .limit(1)
+
+    if (existingClients && existingClients.length > 0) {
+      clientId = existingClients[0].id
+    } else {
+      const { data: newClient, error: clientErr } = await supabase
+        .from('clients')
+        .insert([{ name: fullName, phone }])
+        .select()
+        .single()
+      if (!clientErr && newClient) clientId = newClient.id
+    }
 
     const { data: saleData, error: saleError } = await supabase
       .from('sales')
-      .insert([{ worker_id: selectedWorker.id, total_amount: totalAmount }]) // client_id viria aqui no futuro
+      .insert([{ worker_id: selectedWorker.id, total_amount: totalAmount, client_id: clientId }])
       .select()
       .single()
 
@@ -142,7 +207,7 @@ export default function WorkerTerminal(): JSX.Element {
       item_name: item.name,
       price_at_sale: item.price,
       commission_at_sale: item.commission,
-      quantity: 1
+      quantity: item.quantity
     }))
 
     const { error: itemsError } = await supabase.from('sale_items').insert(saleItems)
@@ -151,14 +216,16 @@ export default function WorkerTerminal(): JSX.Element {
       alert('Erro ao registar detalhes: ' + itemsError.message)
     } else {
       setCart([])
-      setClientName('')
+      setClientFirstName('')
+      setClientLastName('')
+      setClientPhone('')
       setIsAddSaleOpen(false)
       fetchWorkerTodaySales(selectedWorker.id)
     }
     setIsSubmitting(false)
   }
 
-  async function deleteSale(saleId: string) {
+  async function deleteSale(saleId: string): Promise<void> {
     if (!window.confirm('Tens a certeza que queres apagar este registo?')) {
       setIsDeleteMode(false)
       return
@@ -172,7 +239,7 @@ export default function WorkerTerminal(): JSX.Element {
     setIsDeleteMode(false)
   }
 
-  const total = cart.reduce((sum, item) => sum + item.price, 0)
+  const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
 
   // Agrupar trabalhadores por múltiplas funções (roles dinâmicos)
   const groupedWorkers: Record<string, Worker[]> = {}
@@ -185,49 +252,14 @@ export default function WorkerTerminal(): JSX.Element {
   })
 
   return (
-    <div
-      style={{
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-        backgroundColor: AppConfig.theme.backgroundColor,
-        height: '100vh',
-        width: '100vw',
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        boxSizing: 'border-box',
-        overflow: 'hidden'
-      }}
-      onClick={() => isDeleteMode && setIsDeleteMode(false)}
-    >
+    <div style={styles.container} onClick={() => isDeleteMode && setIsDeleteMode(false)}>
       {/* --- MAIN AREA: LINHAS DE TRABALHADORES --- */}
-      <main style={{ flex: 1, padding: '32px', overflowY: 'auto' }}>
-        <div
-          style={{
-            width: '100%',
-            margin: '0 auto'
-          }}
-        >
+      <main style={styles.mainArea}>
+        <div style={styles.contentWrapper}>
           {Object.entries(groupedWorkers).map(([role, roleWorkers]) => (
-            <div key={role} style={{ marginBottom: '40px' }}>
-              <h2
-                style={{
-                  fontSize: '22px',
-                  color: '#4b5563',
-                  textTransform: 'uppercase',
-                  letterSpacing: '1px',
-                  borderBottom: '2px solid #e5e7eb',
-                  paddingBottom: '8px',
-                  marginBottom: '20px',
-                  marginTop: 0
-                }}
-              >
-                {role}
-              </h2>
-              <div
-                style={{ display: 'flex', gap: '16px', overflowX: 'auto', paddingBottom: '12px' }}
-              >
+            <div key={role} style={styles.roleSection}>
+              <h2 style={styles.roleTitle}>{role}</h2>
+              <div style={styles.workersRow}>
                 {roleWorkers.map((worker) => (
                   <WorkerCard
                     key={worker.id}
@@ -239,7 +271,7 @@ export default function WorkerTerminal(): JSX.Element {
             </div>
           ))}
           {workers.length === 0 && (
-            <p style={{ color: '#6b7280', textAlign: 'center', marginTop: '40px' }}>
+            <p style={styles.emptyMessage}>
               Nenhum trabalhador ativo. Adiciona trabalhadores no painel Admin.
             </p>
           )}
@@ -255,9 +287,23 @@ export default function WorkerTerminal(): JSX.Element {
           workerName={selectedWorker.name}
           workerSales={workerSales}
           isDeleteMode={isDeleteMode}
-          onClose={() => setSelectedWorker(null)}
-          onAddService={() => setIsAddSaleOpen(true)}
-          onToggleDeleteMode={(e) => { e.stopPropagation(); setIsDeleteMode(!isDeleteMode); }}
+          onClose={() => {
+            setSelectedWorker(null)
+            setWorkerSales([])
+            setIsDeleteMode(false)
+          }}
+          onAddService={() => {
+            setIsAddSaleOpen(true)
+            setCart([])
+            setClientFirstName('')
+            setClientLastName('')
+            setClientPhone('')
+            setActiveTab('services')
+          }}
+          onToggleDeleteMode={(e) => {
+            e.stopPropagation()
+            setIsDeleteMode(!isDeleteMode)
+          }}
           onDeleteSale={deleteSale}
         />
       )}
@@ -267,11 +313,21 @@ export default function WorkerTerminal(): JSX.Element {
         <CheckoutPopup
           activeTab={activeTab}
           setActiveTab={setActiveTab}
-          onClose={() => setIsAddSaleOpen(false)}
+          onClose={() => {
+            setIsAddSaleOpen(false)
+            setCart([])
+            setClientFirstName('')
+            setClientLastName('')
+            setClientPhone('')
+          }}
           services={services}
           onAddToCart={addToCart}
-          clientName={clientName}
-          setClientName={setClientName}
+          clientFirstName={clientFirstName}
+          setClientFirstName={setClientFirstName}
+          clientLastName={clientLastName}
+          setClientLastName={setClientLastName}
+          clientPhone={clientPhone}
+          setClientPhone={setClientPhone}
           cart={cart}
           onRemoveFromCart={removeFromCart}
           total={total}
