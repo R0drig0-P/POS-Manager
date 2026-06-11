@@ -315,9 +315,7 @@ export default function WorkerDetailsOverlay({
                 <div style={styles.modalClientRow}>
                   <strong>Cliente:</strong> {selectedSale.clients.name}
                 </div>
-                <div style={styles.modalClientRow}>
-                  <strong>Tel:</strong> {selectedSale.clients.phone}
-                </div>
+
               </>
             )}
             <ul style={styles.modalItemList}>
