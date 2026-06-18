@@ -23,6 +23,7 @@ interface WorkerDetailsOverlayProps {
   onAddService: () => void
   onToggleDeleteMode: (e: React.MouseEvent) => void
   onDeleteSale: (id: string) => void
+  onEndShift: () => void
 }
 
 const styles: Record<string, CSSProperties> = {
@@ -125,6 +126,17 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 'bold',
     cursor: 'pointer'
   },
+  endShiftButton: {
+    padding: '20px',
+    backgroundColor: '#f3f4f6',
+    color: '#374151',
+    border: '1px solid #d1d5db',
+    borderRadius: '12px',
+    fontSize: '18px',
+    fontWeight: 'bold',
+    cursor: 'pointer',
+    marginTop: 'auto'
+  },
   modalBackdrop: {
     position: 'absolute',
     top: 0,
@@ -195,7 +207,8 @@ export default function WorkerDetailsOverlay({
   onClose,
   onAddService,
   onToggleDeleteMode,
-  onDeleteSale
+  onDeleteSale,
+  onEndShift
 }: WorkerDetailsOverlayProps): JSX.Element {
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null)
 
@@ -296,6 +309,10 @@ export default function WorkerDetailsOverlay({
             }}
           >
             {isDeleteMode ? 'Cancelar Apagar' : 'Remover Serviço'}
+          </button>
+
+          <button onClick={onEndShift} style={styles.endShiftButton}>
+            Terminar Turno
           </button>
         </div>
       </div>

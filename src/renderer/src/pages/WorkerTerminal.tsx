@@ -5,12 +5,15 @@ import TerminalHotbar from '../components/terminal/TerminalHotbar'
 import WorkerCard from '../components/terminal/WorkerCard'
 import WorkerDetailsOverlay from '../components/terminal/WorkerDetailsOverlay'
 import CheckoutPopup from '../components/terminal/CheckoutPopup'
+import AddWorkerPopup from '../components/terminal/AddWorkerPopup'
 
 interface Worker {
   id: string
   name: string
   commission_services: number
   commission_products: number
+  is_active?: boolean
+  on_shift?: boolean
   roles?: string[] // Array dinâmico de funções
 }
 
@@ -85,6 +88,7 @@ export default function WorkerTerminal(): JSX.Element {
   const [isAddSaleOpen, setIsAddSaleOpen] = useState(false)
   const [isDeleteMode, setIsDeleteMode] = useState(false)
   const [activeTab, setActiveTab] = useState<'services' | 'products'>('services')
+  const [isAddWorkerOpen, setIsAddWorkerOpen] = useState(false)
 
   // Estado do Carrinho (Nova Venda)
   const [cart, setCart] = useState<CartItem[]>([])
@@ -94,9 +98,40 @@ export default function WorkerTerminal(): JSX.Element {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
-    fetchWorkers()
-    fetchServices()
+    async function initTerminal(): Promise<void> {
+      await checkAndResetShifts()
+      fetchWorkers()
+      fetchServices()
+    }
+    initTerminal()
+
+    // Verificação de meia-noite (para POS que fica sempre aberto)
+    const interval = setInterval(async () => {
+      const didReset = await checkAndResetShifts()
+      if (didReset) fetchWorkers()
+    }, 60000)
+    
+    return () => clearInterval(interval)
   }, [])
+
+  // Função de Limpeza Diária do Turno
+  async function checkAndResetShifts(): Promise<boolean> {
+    const todayStr = new Date().toDateString()
+    const lastReset = localStorage.getItem('last_shift_reset')
+
+    if (lastReset !== todayStr) {
+      // Fazemos o update individualmente para garantir que não é bloqueado por restrições de segurança do Supabase
+      const { data, error } = await supabase.from('workers').select('id').eq('on_shift', true)
+      if (!error) {
+        if (data && data.length > 0) {
+          await Promise.all(data.map((w) => supabase.from('workers').update({ on_shift: false }).eq('id', w.id)))
+        }
+        localStorage.setItem('last_shift_reset', todayStr)
+        return true
+      }
+    }
+    return false
+  }
 
   // Quando um trabalhador é selecionado, carrega as vendas DELE para o DIA DE HOJE
   useEffect(() => {
@@ -106,7 +141,7 @@ export default function WorkerTerminal(): JSX.Element {
   }, [selectedWorker])
 
   async function fetchWorkers(): Promise<void> {
-    const { data } = await supabase.from('workers').select('*').eq('is_active', true).order('name')
+    const { data } = await supabase.from('workers').select('*').eq('on_shift', true).order('name')
     if (data) setWorkers(data)
   }
 
@@ -239,6 +274,19 @@ export default function WorkerTerminal(): JSX.Element {
     setIsDeleteMode(false)
   }
 
+  async function endShift(): Promise<void> {
+    if (!selectedWorker) return
+    if (!window.confirm(`Pretendes terminar o turno de ${selectedWorker.name}?`)) return
+    
+    const { error } = await supabase.from('workers').update({ on_shift: false }).eq('id', selectedWorker.id)
+    if (!error) {
+      setSelectedWorker(null)
+      setWorkerSales([])
+      setIsDeleteMode(false)
+      fetchWorkers()
+    }
+  }
+
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
 
   // Agrupar trabalhadores por múltiplas funções (roles dinâmicos)
@@ -279,7 +327,11 @@ export default function WorkerTerminal(): JSX.Element {
       </main>
 
       {/* --- HOTBAR (BASE) --- */}
-      <TerminalHotbar />
+      <TerminalHotbar onAddWorker={async () => {
+        const didReset = await checkAndResetShifts()
+        if (didReset) fetchWorkers()
+        setIsAddWorkerOpen(true)
+      }} />
 
       {/* --- WIDGET DO TRABALHADOR (OVERLAY) --- */}
       {selectedWorker && !isAddSaleOpen && (
@@ -305,6 +357,7 @@ export default function WorkerTerminal(): JSX.Element {
             setIsDeleteMode(!isDeleteMode)
           }}
           onDeleteSale={deleteSale}
+          onEndShift={endShift}
         />
       )}
 
@@ -333,6 +386,17 @@ export default function WorkerTerminal(): JSX.Element {
           total={total}
           onCheckout={checkout}
           isSubmitting={isSubmitting}
+        />
+      )}
+
+      {/* --- POPUP DE ADICIONAR TRABALHADOR --- */}
+      {isAddWorkerOpen && (
+        <AddWorkerPopup
+          onClose={() => setIsAddWorkerOpen(false)}
+          onSuccess={() => {
+            setIsAddWorkerOpen(false)
+            fetchWorkers() // Recarrega a lista para mostrar o novo trabalhador imediatamente
+          }}
         />
       )}
     </div>

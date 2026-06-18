@@ -20,7 +20,15 @@ const styles: Record<string, CSSProperties> = {
   },
   sectionTitle: { marginTop: 0, fontSize: '18px', color: AppConfig.theme.primaryColor },
   form: { display: 'flex', flexDirection: 'column', gap: '12px' },
-  input: { padding: '14px', fontSize: '16px', border: '1px solid #d1d5db', borderRadius: '8px' },
+  input: {
+    padding: '14px',
+    fontSize: '16px',
+    border: '1px solid #d1d5db',
+    borderRadius: '8px',
+    WebkitAppRegion: 'no-drag',
+    WebkitUserSelect: 'text',
+    userSelect: 'text'
+  },
   submitButton: {
     padding: '16px',
     fontSize: '16px',

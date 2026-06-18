@@ -115,7 +115,10 @@ const styles: Record<string, CSSProperties> = {
     fontSize: '16px',
     border: '1px solid #d1d5db',
     borderRadius: '8px',
-    boxSizing: 'border-box'
+    boxSizing: 'border-box',
+    WebkitAppRegion: 'no-drag',
+    WebkitUserSelect: 'text',
+    userSelect: 'text'
   },
   cartList: { listStyle: 'none', padding: '10px 20px', flex: 1, overflowY: 'auto', margin: 0 },
   cartItem: {
@@ -179,11 +182,12 @@ export default function CheckoutPopup({
     color: activeTab === tab ? '#fff' : '#6b7280'
   })
 
+  const isPhoneValid = /^[29]\d{8}$/.test(clientPhone)
   const isReadyToCheckout =
     cart.length > 0 &&
     clientFirstName.trim() !== '' &&
     clientLastName.trim() !== '' &&
-    clientPhone.trim() !== '' &&
+    isPhoneValid &&
     !isSubmitting
 
   return (
@@ -230,21 +234,21 @@ export default function CheckoutPopup({
               type="text"
               placeholder="Nome"
               value={clientFirstName}
-              onChange={(e) => setClientFirstName(e.target.value)}
+              onChange={(e) => setClientFirstName(e.target.value.replace(/[^a-zA-ZÀ-ÿ\s-]/g, ''))}
               style={styles.clientInput}
             />
             <input
               type="text"
               placeholder="Apelido"
               value={clientLastName}
-              onChange={(e) => setClientLastName(e.target.value)}
+              onChange={(e) => setClientLastName(e.target.value.replace(/[^a-zA-ZÀ-ÿ\s-]/g, ''))}
               style={styles.clientInput}
             />
             <input
               type="tel"
-              placeholder="Telemóvel"
+              placeholder="Telemóvel (9... ou 2...)"
               value={clientPhone}
-              onChange={(e) => setClientPhone(e.target.value)}
+              onChange={(e) => setClientPhone(e.target.value.replace(/\D/g, '').replace(/^[^29]+/, '').slice(0, 9))}
               style={styles.clientInput}
             />
           </div>
