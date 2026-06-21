@@ -21,6 +21,7 @@ interface Service {
   id: string
   name: string
   price: number
+  roles?: string[]
 }
 
 interface CartItem {
@@ -373,7 +374,12 @@ export default function WorkerTerminal(): JSX.Element {
             setClientLastName('')
             setClientPhone('')
           }}
-          services={services}
+          services={services.filter(s => {
+            const serviceRoles = s.roles || ['Geral']
+            if (serviceRoles.includes('Geral')) return true
+            const workerRoles = selectedWorker.roles || ['Equipa Geral']
+            return serviceRoles.some(r => workerRoles.includes(r))
+          })}
           onAddToCart={addToCart}
           clientFirstName={clientFirstName}
           setClientFirstName={setClientFirstName}

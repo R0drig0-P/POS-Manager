@@ -70,7 +70,7 @@ export default function AdminDashboard(): JSX.Element {
     setIsSaving(true)
     const { error } = await supabase.from('settings').update({ value: newPassword }).eq('id', 'admin_password')
     setIsSaving(false)
-    
+
     if (error) alert('Erro ao alterar senha: ' + error.message)
     else {
       alert('Senha alterada com sucesso!')
